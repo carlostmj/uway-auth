@@ -1,18 +1,26 @@
 {
   "name": "carlostmj/uway-auth",
-  "description": "SDK PHP para integracao com UWAY Auth (OAuth 2.0 + OpenID Connect).",
+  "description": "SDK PHP para integração com UWAY Auth (OAuth 2.0 + OpenID Connect).",
   "type": "library",
   "license": "MIT",
-  "version": "1.2.0",
+
   "require": {
-    "ext-curl": "*",
-    "php": "^8.3"
+    "php": "^8.3",
+    "ext-curl": "*"
   },
+
   "autoload": {
     "psr-4": {
-      "UwayAuth\\Sdk\\": "src/"
+      "CarlosTMJ\\UwayAuth\\": "src/"
     }
   },
+
+  "extra": {
+    "branch-alias": {
+      "dev-main": "1.2.0.x-dev"
+    }
+  },
+
   "minimum-stability": "stable",
   "prefer-stable": true
 }
