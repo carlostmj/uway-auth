@@ -4,24 +4,52 @@ declare(strict_types=1);
 
 namespace UwayAuth\Sdk;
 
-use RuntimeException;
+use UwayAuth\Sdk\Http\HttpClient;
+use UwayAuth\Sdk\Modules\AppsModule;
+use UwayAuth\Sdk\Modules\AuthModule;
+use UwayAuth\Sdk\Modules\OidcModule;
+use UwayAuth\Sdk\Modules\UserModule;
 
 final class UwayAuthService
 {
     private UwayAuthClient $client;
-    private int $timeoutSeconds;
+    private HttpClient $http;
+    private AuthModule $auth;
+    private OidcModule $oidc;
+    private UserModule $user;
+    private AppsModule $apps;
 
     /**
      * Service de integracao para login com UWAY Auth.
      */
     public function __construct(UwayAuthClient $client, int $timeoutSeconds = 15)
     {
-        if (! function_exists('curl_init')) {
-            throw new RuntimeException('Extensao cURL nao esta disponivel.');
-        }
-
         $this->client = $client;
-        $this->timeoutSeconds = $timeoutSeconds;
+        $this->http = new HttpClient($timeoutSeconds);
+        $this->auth = new AuthModule($this->client, $this->http);
+        $this->oidc = new OidcModule($this->client, $this->http);
+        $this->user = new UserModule($this->client, $this->http);
+        $this->apps = new AppsModule($this->client, $this->http);
+    }
+
+    public function auth(): AuthModule
+    {
+        return $this->auth;
+    }
+
+    public function oidc(): OidcModule
+    {
+        return $this->oidc;
+    }
+
+    public function user(): UserModule
+    {
+        return $this->user;
+    }
+
+    public function apps(): AppsModule
+    {
+        return $this->apps;
     }
 
     /**
@@ -36,7 +64,7 @@ final class UwayAuthService
         ?string $codeChallenge = null,
         string $codeChallengeMethod = 'S256'
     ): string {
-        return $this->client->buildAuthorizationUrl(
+        return $this->auth->buildAuthorizationUrl(
             $redirectUri,
             $scopes,
             $state,
@@ -55,9 +83,7 @@ final class UwayAuthService
         string $redirectUri,
         ?string $codeVerifier = null
     ): array {
-        $payload = $this->client->buildTokenRequestForAuthorizationCode($code, $redirectUri, $codeVerifier);
-
-        return $this->postForm($this->client->getTokenEndpoint(), $payload);
+        return $this->auth->exchangeAuthorizationCode($code, $redirectUri, $codeVerifier);
     }
 
     /**
@@ -68,9 +94,7 @@ final class UwayAuthService
      */
     public function refreshTokens(string $refreshToken, ?array $scopes = null): array
     {
-        $payload = $this->client->buildTokenRequestForRefreshToken($refreshToken, $scopes);
-
-        return $this->postForm($this->client->getTokenEndpoint(), $payload);
+        return $this->auth->refreshTokens($refreshToken, $scopes);
     }
 
     /**
@@ -81,9 +105,7 @@ final class UwayAuthService
      */
     public function exchangeClientCredentials(?array $scopes = null): array
     {
-        $payload = $this->client->buildTokenRequestForClientCredentials($scopes);
-
-        return $this->postForm($this->client->getTokenEndpoint(), $payload);
+        return $this->auth->exchangeClientCredentials($scopes);
     }
 
     /**
@@ -93,10 +115,27 @@ final class UwayAuthService
      */
     public function fetchUserInfo(string $accessToken): array
     {
-        return $this->getJson(
-            $this->client->getUserInfoEndpoint(),
-            $this->client->buildUserInfoHeaders($accessToken)
-        );
+        return $this->oidc->fetchUserInfo($accessToken);
+    }
+
+    /**
+     * Consulta o perfil do usuario via /api/v1/user usando access_token.
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchUserProfileWithAccessToken(string $accessToken): array
+    {
+        return $this->user->fetchProfileWithAccessToken($accessToken);
+    }
+
+    /**
+     * Consulta o perfil do usuario via /api/v1/user usando API key.
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchUserProfileWithApiKey(string $apiKey): array
+    {
+        return $this->user->fetchProfileWithApiKey($apiKey);
     }
 
     /**
@@ -106,7 +145,7 @@ final class UwayAuthService
      */
     public function fetchOpenIdConfiguration(): array
     {
-        return $this->getJson($this->client->getOpenIdConfigurationEndpoint());
+        return $this->oidc->fetchOpenIdConfiguration();
     }
 
     /**
@@ -116,7 +155,7 @@ final class UwayAuthService
      */
     public function fetchJwks(): array
     {
-        return $this->getJson($this->client->getJwksEndpoint());
+        return $this->oidc->fetchJwks();
     }
 
     /**
@@ -126,10 +165,7 @@ final class UwayAuthService
      */
     public function fetchAppInfo(string $accessToken): array
     {
-        return $this->getJson(
-            $this->client->getAppsMeEndpoint(),
-            $this->client->buildUserInfoHeaders($accessToken)
-        );
+        return $this->apps->fetchAppInfo($accessToken);
     }
 
     /**
@@ -139,84 +175,6 @@ final class UwayAuthService
      */
     public function fetchAppScopes(string $accessToken): array
     {
-        return $this->getJson(
-            $this->client->getAppsScopesEndpoint(),
-            $this->client->buildUserInfoHeaders($accessToken)
-        );
-    }
-
-    /**
-     * @param array<string, string> $data
-     * @return array<string, mixed>
-     */
-    private function postForm(string $url, array $data): array
-    {
-        $body = http_build_query($data, '', '&', PHP_QUERY_RFC3986);
-
-        return $this->requestJson('POST', $url, [
-            'Accept' => 'application/json',
-            'Content-Type' => 'application/x-www-form-urlencoded',
-        ], $body);
-    }
-
-    /**
-     * @param array<string, string> $headers
-     * @return array<string, mixed>
-     */
-    private function getJson(string $url, array $headers = []): array
-    {
-        $headers['Accept'] = $headers['Accept'] ?? 'application/json';
-
-        return $this->requestJson('GET', $url, $headers, null);
-    }
-
-    /**
-     * @param array<string, string> $headers
-     * @return array<string, mixed>
-     */
-    private function requestJson(string $method, string $url, array $headers, ?string $body): array
-    {
-        $ch = curl_init($url);
-        if ($ch === false) {
-            throw new RuntimeException('Falha ao iniciar cURL.');
-        }
-
-        $headerLines = [];
-        foreach ($headers as $name => $value) {
-            $headerLines[] = $name.': '.$value;
-        }
-
-        curl_setopt_array($ch, [
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headerLines,
-            CURLOPT_TIMEOUT => $this->timeoutSeconds,
-        ]);
-
-        if ($body !== null) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        }
-
-        $response = curl_exec($ch);
-        if ($response === false) {
-            $error = curl_error($ch);
-            curl_close($ch);
-            throw new RuntimeException('Falha na requisicao HTTP: '.$error);
-        }
-
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $data = json_decode($response, true);
-        if (! is_array($data)) {
-            throw new RuntimeException('Resposta JSON invalida do UWAY Auth.');
-        }
-
-        if ($status >= 400) {
-            $message = $data['message'] ?? $data['error_description'] ?? 'Erro desconhecido.';
-            throw new RuntimeException('UWAY Auth retornou HTTP '.$status.': '.$message);
-        }
-
-        return $data;
+        return $this->apps->fetchAppScopes($accessToken);
     }
 }

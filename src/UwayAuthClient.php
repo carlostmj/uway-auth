@@ -35,6 +35,11 @@ final class UwayAuthClient
         return $this->baseUrl.'/oauth/userinfo';
     }
 
+    public function getUserApiEndpoint(): string
+    {
+        return $this->baseUrl.'/api/v1/user';
+    }
+
     public function getOpenIdConfigurationEndpoint(): string
     {
         return $this->baseUrl.'/.well-known/openid-configuration';
@@ -169,6 +174,18 @@ final class UwayAuthClient
     {
         return [
             'Authorization' => 'Bearer '.$accessToken,
+        ];
+    }
+
+    /**
+     * Retorna os headers para autenticar via API key.
+     *
+     * @return array<string, string>
+     */
+    public function buildApiKeyHeaders(string $apiKey): array
+    {
+        return [
+            'X-UWAY-API-KEY' => $apiKey,
         ];
     }
 

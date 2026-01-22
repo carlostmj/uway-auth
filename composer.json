@@ -3,7 +3,7 @@
   "description": "SDK PHP para integracao com UWAY Auth (OAuth 2.0 + OpenID Connect).",
   "type": "library",
   "license": "MIT",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "require": {
     "ext-curl": "*",
     "php": "^8.3"
