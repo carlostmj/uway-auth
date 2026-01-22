@@ -32,7 +32,27 @@ final class UwayAuthClient
 
     public function getUserInfoEndpoint(): string
     {
-        return $this->baseUrl.'/api/user';
+        return $this->baseUrl.'/oauth/userinfo';
+    }
+
+    public function getOpenIdConfigurationEndpoint(): string
+    {
+        return $this->baseUrl.'/.well-known/openid-configuration';
+    }
+
+    public function getJwksEndpoint(): string
+    {
+        return $this->baseUrl.'/.well-known/jwks.json';
+    }
+
+    public function getAppsMeEndpoint(): string
+    {
+        return $this->baseUrl.'/api/v1/apps/me';
+    }
+
+    public function getAppsScopesEndpoint(): string
+    {
+        return $this->baseUrl.'/api/v1/apps/scopes';
     }
 
     /**
@@ -117,7 +137,31 @@ final class UwayAuthClient
     }
 
     /**
-     * Retorna os headers para consultar o endpoint /api/user.
+     * Monta o payload para client_credentials (apps server-to-server).
+     *
+     * @param array<int, string>|null $scopes
+     * @return array<string, string>
+     */
+    public function buildTokenRequestForClientCredentials(?array $scopes = null): array
+    {
+        $data = [
+            'grant_type' => 'client_credentials',
+            'client_id' => $this->clientId,
+        ];
+
+        if ($this->clientSecret !== null) {
+            $data['client_secret'] = $this->clientSecret;
+        }
+
+        if ($scopes !== null && $scopes !== []) {
+            $data['scope'] = implode(' ', $scopes);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Retorna os headers para consultar endpoints protegidos.
      *
      * @return array<string, string>
      */

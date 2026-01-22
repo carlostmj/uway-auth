@@ -74,7 +74,20 @@ final class UwayAuthService
     }
 
     /**
-     * Consulta os dados basicos do usuario via /api/user.
+     * Troca client_credentials por access_token (apps server-to-server).
+     *
+     * @param array<int, string>|null $scopes
+     * @return array<string, mixed>
+     */
+    public function exchangeClientCredentials(?array $scopes = null): array
+    {
+        $payload = $this->client->buildTokenRequestForClientCredentials($scopes);
+
+        return $this->postForm($this->client->getTokenEndpoint(), $payload);
+    }
+
+    /**
+     * Consulta os dados basicos do usuario via /oauth/userinfo.
      *
      * @return array<string, mixed>
      */
@@ -82,6 +95,52 @@ final class UwayAuthService
     {
         return $this->getJson(
             $this->client->getUserInfoEndpoint(),
+            $this->client->buildUserInfoHeaders($accessToken)
+        );
+    }
+
+    /**
+     * Busca o OpenID Connect discovery.
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchOpenIdConfiguration(): array
+    {
+        return $this->getJson($this->client->getOpenIdConfigurationEndpoint());
+    }
+
+    /**
+     * Busca o JWKS publico para validar JWTs.
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchJwks(): array
+    {
+        return $this->getJson($this->client->getJwksEndpoint());
+    }
+
+    /**
+     * Retorna dados do app autenticado via client_credentials.
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchAppInfo(string $accessToken): array
+    {
+        return $this->getJson(
+            $this->client->getAppsMeEndpoint(),
+            $this->client->buildUserInfoHeaders($accessToken)
+        );
+    }
+
+    /**
+     * Retorna escopos do app autenticado via client_credentials.
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchAppScopes(string $accessToken): array
+    {
+        return $this->getJson(
+            $this->client->getAppsScopesEndpoint(),
             $this->client->buildUserInfoHeaders($accessToken)
         );
     }
